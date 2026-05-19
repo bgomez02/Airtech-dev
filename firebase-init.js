@@ -1,48 +1,58 @@
-// ══════════════════════════════════════════════════════════
-// firebase-init.js — ENTORNO DE DESARROLLO (Airtech-dev)
-// ⚠️ NO usar en producción
-// 
-// 1. Crea proyecto en https://console.firebase.google.com
-//    Nombre sugerido: airtec-dev-2026
-// 2. Activa Firestore + Authentication (Email + Anónimo)
-// 3. Copia las credenciales abajo
-// ══════════════════════════════════════════════════════════
+// ── Firebase Initialization & window.FB setup ──
 
-try {
-  const cfg = {
-    apiKey:            "PEGAR_API_KEY_DEV",
-    authDomain:        "PEGAR_PROJECT_ID.firebaseapp.com",
-    projectId:         "PEGAR_PROJECT_ID",
-    storageBucket:     "PEGAR_PROJECT_ID.appspot.com",
-    messagingSenderId: "PEGAR_SENDER_ID",
-    appId:             "PEGAR_APP_ID"
-  };
-  const app  = firebase.initializeApp(cfg);
-  const auth = firebase.auth();
-  const db   = firebase.firestore();
-
-  db.enablePersistence({ experimentalForceOwningTab: true })
-    .then(() => console.log('✅ [DEV] Firestore persistence activo'))
-    .catch(err => { if(err.code !== 'failed-precondition') console.warn(err); });
-
-  auth.signInAnonymously().then(cred => {
-    window.FB = {
-      auth, db, uid: cred.user.uid,
-      onSnapshot: (ref, cb) => ref.onSnapshot(cb),
-      addDoc:     (ref, data) => ref.add(data),
-      setDoc:     (ref, data, opts) => opts ? ref.set(data, opts) : ref.set(data),
-      TASKS:   (st) => db.collection(window.AIRLINE_ID||'arajet_dev').doc(st||'PUJ').collection('tasks'),
-      TECHS:   (st) => db.collection(window.AIRLINE_ID||'arajet_dev').doc(st||'PUJ').collection('techs'),
-      REPORTS: (st) => db.collection(window.AIRLINE_ID||'arajet_dev').doc(st||'PUJ').collection('reports'),
-      PLANS:   (st) => db.collection(window.AIRLINE_ID||'arajet_dev').doc(st||'PUJ').collection('plans'),
-      HISTORY: (st) => db.collection(window.AIRLINE_ID||'arajet_dev').doc(st||'PUJ').collection('history'),
-      DOCS:    (st) => db.collection(window.AIRLINE_ID||'arajet_dev').doc(st||'PUJ').collection('documents'),
+  try {
+    const cfg={
+      apiKey:            "AIzaSyAOd612XuYZFZ8e9B1ZIYNZVP0CCJpfFl4",
+      authDomain:        "airtec-dev-2026.firebaseapp.com",
+      projectId:         "airtec-dev-2026",
+      storageBucket:     "airtec-dev-2026.firebasestorage.app",
+      messagingSenderId: "683128530653",
+      appId:             "1:683128530653:web:cc599d69a56a0032039d34"
     };
-    console.log('✅ [DEV] Firebase listo — AIRLINE_ID: arajet_dev');
-  }).catch(e => {
-    document.getElementById('loader-err').style.display = 'block';
-    document.getElementById('loader-err-msg').textContent = 'Error DEV: ' + e.message;
-  });
-} catch(e) {
-  console.error('❌ [DEV] Firebase init error:', e);
-}
+    const app     = firebase.initializeApp(cfg);
+    const auth    = firebase.auth();
+    const db      = firebase.firestore();
+
+    // ── Offline persistence: Firestore caches data in IndexedDB ──
+    db.enablePersistence({experimentalForceOwningTab:true})
+      .then(()=>console.log('✅ Firestore offline persistence activo'))
+      .catch(err=>{
+        if(err.code==='failed-precondition') console.warn('Múltiples pestañas abiertas — persistence solo en una');
+        else if(err.code==='unimplemented') console.warn('Navegador no soporta persistence');
+        else console.warn('Persistence error:',err);
+      });
+
+    window.FB = {
+      auth,
+      db,
+      signInAnonymously : ()=>auth.signInAnonymously(),
+      onAuthStateChanged: (a,cb)=>auth.onAuthStateChanged(cb),
+      addDoc   : (col,data)=>col.add(data),
+      setDoc   : (ref,data)=>ref.set(data,{merge:true}),
+      updateDoc: (ref,data)=>ref.update(data),
+      deleteDoc: (ref)=>ref.delete(),
+      doc      : (db2,col,id,...rest)=>{
+        // Flexible: doc(db, col, id) or doc(db, 'arajet_dev','PUJ','tasks','id')
+        if(rest.length===0) return db2.collection(col).doc(id);
+        // arajet / station / subcol / docid
+        return db2.collection(col).doc(id).collection(rest[0]).doc(rest[1]);
+      },
+      onSnapshot: (col,cb)=>col.onSnapshot(snap=>cb(snap)),
+      TASKS: (st)=>db.collection('arajet_dev').doc(st||window._station||"PUJ").collection("tasks"),
+      TECHS: (st)=>db.collection('arajet_dev').doc(st||window._station||"PUJ").collection("techs"),
+      HIST:  (st)=>db.collection('arajet_dev').doc(st||window._station||"PUJ").collection("history"),
+      DOCS:    (st)=>db.collection('arajet_dev').doc(st||window._station||"PUJ").collection("documents"),
+      REPORTS: (st)=>db.collection('arajet_dev').doc(st||window._station||"PUJ").collection("reports"),
+      PLANS:   (st)=>db.collection('arajet_dev').doc(st||window._station||"PUJ").collection("plans"),
+      TASKCATALOG: ()=>db.collection('arajet_dev').doc("config").collection("taskCatalog"),
+      USERS: ()=>db.collection('arajet_dev').doc("config").collection("users"),
+    };
+    window.dispatchEvent(new Event("fb-ready"));
+    console.log("✅ Firebase Compat inicializado correctamente");
+  } catch(e){
+    console.error("❌ Firebase init error:", e);
+    document.getElementById('loader-err').style.display='block';
+    document.getElementById('loader-spin').style.display='none';
+    document.getElementById('loader-domain').textContent = window.location.hostname;
+    document.getElementById('loader-err-msg').textContent = "Error al inicializar Firebase: " + e.message;
+  }
